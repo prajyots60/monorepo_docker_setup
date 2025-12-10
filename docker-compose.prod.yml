@@ -1,0 +1,79 @@
+# Docker Compose for Production (Using DockerHub Images)
+# Replace <your-dockerhub-username> with your actual DockerHub username
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: monorepo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supra}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - monorepo-network
+
+  # Backend API
+  backend:
+    image: <your-dockerhub-username>/monorepo-backend:latest
+    container_name: monorepo-backend
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-supra}@postgres:5432/postgres"
+      NODE_ENV: production
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - monorepo-network
+
+  # WebSocket Server
+  ws:
+    image: <your-dockerhub-username>/monorepo-ws:latest
+    container_name: monorepo-ws
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-supra}@postgres:5432/postgres"
+      NODE_ENV: production
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - monorepo-network
+
+  # Next.js Web App
+  web:
+    image: <your-dockerhub-username>/monorepo-web:latest
+    container_name: monorepo-web
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-supra}@postgres:5432/postgres"
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - monorepo-network
+
+volumes:
+  postgres_data:
+
+networks:
+  monorepo-network:
+    driver: bridge

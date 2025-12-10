@@ -1,0 +1,99 @@
+name: Build and Push to DockerHub
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        service:
+          - name: backend
+            dockerfile: docker/Dockerfile.backend
+            context: .
+          - name: ws
+            dockerfile: docker/Dockerfile.ws
+            context: .
+          - name: web
+            dockerfile: docker/Dockerfile.web
+            context: .
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-${{ matrix.service.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/monorepo-${{ matrix.service.name }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/monorepo-${{ matrix.service.name }}:buildcache,mode=max
+          build-args: |
+            DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+
+      - name: Image digest
+        run: echo ${{ steps.meta.outputs.digest }}
+
+  # Optional: Deploy job (runs after build-and-push)
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy notification
+        run: |
+          echo "✅ All images built and pushed successfully!"
+          echo "🚀 Ready to deploy:"
+          echo "   - ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-backend:latest"
+          echo "   - ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-ws:latest"
+          echo "   - ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-web:latest"
+      
+      # Add your deployment steps here
+      # Examples:
+      # - SSH to server and pull new images
+      # - Update Kubernetes deployments
+      # - Trigger AWS ECS deployment
+      # - Update Docker Swarm services
