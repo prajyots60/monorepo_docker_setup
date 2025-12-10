@@ -69,5 +69,9 @@ app.post('/todos', async(req , res) => {
     });
 })
 
+console.log(process.env.DATABASE_URL);
 
-app.listen(8080)
+
+app.listen(8082, () => {
+    console.log('Server is running on http://localhost:8082');
+})

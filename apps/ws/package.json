@@ -1,24 +1,21 @@
 {
-  "name": "backend",
+  "name": "ws",
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "scripts": {
+    "scripts": {
     "dev": "bun --watch index.ts",
     "build": "bun build ./index.ts --target bun --outfile dist/index.js",
     "start": "bun run dist/index.js",
     "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "db": "*"
   },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "@types/express": "^5.0.6",
-    "db": "*",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1"
   }
 }

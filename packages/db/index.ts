@@ -1,12 +1,15 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
 import  {PrismaClient}  from '@prisma/client';
-// import {withPgAdapter} from 'prisma-pg-adapter';
-// import {Pool} from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 
-const connectionString = process.env.DATABASE_URL || '';
+// Load .env from monorepo root
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const connectionString = process.env.DATABASE_URL as string;
+
+console.log("db url from client", connectionString)
 
 const pgPool = new pg.Pool({
     connectionString,
