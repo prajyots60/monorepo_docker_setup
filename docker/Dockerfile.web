@@ -1,0 +1,35 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+COPY turbo.json ./
+
+COPY packages/db/package.json ./packages/db/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY packages/typescript-config/package.json ./packages/typescript-config/
+COPY apps/web/package.json ./apps/web/
+
+RUN bun install
+
+COPY packages/db ./packages/db/
+COPY packages/ui ./packages/ui/
+COPY packages/eslint-config ./packages/eslint-config/
+COPY packages/typescript-config ./packages/typescript-config/
+COPY apps/web ./apps/web/
+
+# Build argument for DATABASE_URL
+ARG DATABASE_URL="postgresql://postgres:supra@postgres:5432/postgres"
+ENV DATABASE_URL=$DATABASE_URL
+
+WORKDIR /app/packages/db
+RUN bunx prisma generate
+
+WORKDIR /app/apps/web
+RUN bun run build
+
+EXPOSE 3000
+
+CMD ["bun", "run", "start"]
+

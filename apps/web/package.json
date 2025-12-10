@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
-    "start": "next start",
+    "migrate": "cd ../../packages/db && bunx prisma migrate deploy",
+    "start": "bun run migrate && next start",
+    "start:prod": "next start",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"
   },
