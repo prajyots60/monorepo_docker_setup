@@ -19,12 +19,9 @@ COPY packages/db ./packages/db/
 # Copy the backend app
 COPY apps/backend ./apps/backend/
 
-# Build argument for DATABASE_URL
-# ARG DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
-# ENV DATABASE_URL=$DATABASE_URL
-
-# Copy root .env file (for the db package to load)
-COPY .env ./
+# Build argument for DATABASE_URL (can be overridden at build time)
+ARG DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+ENV DATABASE_URL=$DATABASE_URL
 
 # Generate Prisma Client
 WORKDIR /app/packages/db

@@ -13,7 +13,9 @@ RUN bun install
 COPY packages/db ./packages/db/
 COPY apps/ws ./apps/ws/
 
-COPY .env ./
+# Build argument for DATABASE_URL (can be overridden at build time)
+ARG DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+ENV DATABASE_URL=$DATABASE_URL
 
 WORKDIR /app/packages/db
 RUN bunx prisma generate

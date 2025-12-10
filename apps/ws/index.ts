@@ -1,4 +1,3 @@
-import "dotenv/config";
 import prismaClient from "db/client";
 
 Bun.serve({
