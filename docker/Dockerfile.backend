@@ -1,0 +1,41 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+# Copy root package.json and lockfile first (for monorepo workspace)
+COPY package.json bun.lock* ./
+COPY turbo.json ./
+
+# Copy workspace packages
+COPY packages/db/package.json ./packages/db/
+COPY apps/backend/package.json ./apps/backend/
+
+# Install dependencies
+RUN bun install
+
+# Copy the db package (needed for prisma and the db client)
+COPY packages/db ./packages/db/
+
+# Copy the backend app
+COPY apps/backend ./apps/backend/
+
+# Build argument for DATABASE_URL
+# ARG DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+# ENV DATABASE_URL=$DATABASE_URL
+
+# Copy root .env file (for the db package to load)
+COPY .env ./
+
+# Generate Prisma Client
+WORKDIR /app/packages/db
+RUN bunx prisma generate
+
+# Build the backend app
+WORKDIR /app/apps/backend
+RUN bun run build
+
+# Expose the port
+EXPOSE 8082
+
+# Start the server (migrations run automatically via start script)
+CMD ["bun", "run", "start"]

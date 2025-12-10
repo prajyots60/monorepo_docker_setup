@@ -6,7 +6,9 @@
     "scripts": {
     "dev": "bun --watch index.ts",
     "build": "bun build ./index.ts --target bun --outfile dist/index.js",
-    "start": "bun run dist/index.js",
+    "migrate": "cd ../../packages/db && bunx prisma migrate deploy",
+    "start": "bun run migrate && bun run dist/index.js",
+    "start:prod": "bun run dist/index.js",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: monorepo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supra
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: monorepo-backend
+    environment:
+      DATABASE_URL: "postgresql://postgres:supra@postgres:5432/postgres"
+      NODE_ENV: production
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # WebSocket Server
+  ws:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ws
+    container_name: monorepo-ws
+    environment:
+      DATABASE_URL: "postgresql://postgres:supra@postgres:5432/postgres"
+      NODE_ENV: production
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Next.js Web App
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: monorepo-web
+    environment:
+      DATABASE_URL: "postgresql://postgres:supra@postgres:5432/postgres"
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
