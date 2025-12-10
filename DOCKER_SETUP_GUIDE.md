@@ -3,12 +3,10 @@
 ## 📋 Table of Contents
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Environment Variables Strategy](#environment-variables-strategy)
 4. [Dockerfile Best Practices](#dockerfile-best-practices)
 5. [Common Issues & Solutions](#common-issues--solutions)
 6. [Build & Run Commands](#build--run-commands)
 7. [Docker Compose Setup](#docker-compose-setup)
-8. [Optimization Techniques](#optimization-techniques)
 
 ---
 
@@ -62,64 +60,6 @@ PostgreSQL (postgres)
 
 ---
 
-## Environment Variables Strategy
-
-### Problem: Multiple .env Files vs Single Source of Truth
-
-**❌ Bad Approach:**
-```
-apps/backend/.env
-apps/ws/.env
-apps/web/.env
-packages/db/.env
-```
-**Issues:** Duplication, inconsistency, maintenance nightmare
-
-**✅ Good Approach:**
-```
-my_app/.env  (single source of truth)
-```
-
-### Solution Implementation
-
-**1. Root `.env` file:**
-```bash
-# /my_app/.env
-DATABASE_URL="postgresql://postgres:supra@localhost:5432/postgres"
-```
-
-**2. Updated `packages/db/index.ts`:**
-```typescript
-import dotenv from 'dotenv';
-import path from 'path';
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
-
-// Load .env from monorepo root (2 levels up)
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-
-const connectionString = process.env.DATABASE_URL as string;
-
-console.log("db url from client", connectionString);
-
-const pgPool = new pg.Pool({ connectionString });
-const adapter = new PrismaPg(pgPool);
-const prismaClient = new PrismaClient({ adapter });
-
-export default prismaClient;
-```
-
-**3. For Next.js (requires `.env.local`):**
-```bash
-# apps/web/.env.local
-DATABASE_URL="postgresql://postgres:supra@localhost:5432/postgres"
-```
-
-**Why Next.js needs separate file:**
-- Next.js has built-in env loading (doesn't use dotenv)
-- Automatically loads `.env.local`, `.env`, etc.
-- `.env.local` is git-ignored and takes precedence
 
 ### Docker Environment Variables
 
@@ -240,71 +180,7 @@ CMD ["bun", "run", "start"]
 
 ## Common Issues & Solutions
 
-### Issue 1: DATABASE_URL is undefined in apps
-
-**Symptom:**
-```
-db url from client undefined
-```
-
-**Root Cause:**
-- The db package loads `.env` from monorepo root
-- Apps running in their own directories can't find `../../.env`
-
-**Solution:**
-Update `packages/db/index.ts` to use absolute path:
-```typescript
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-```
-
----
-
-### Issue 2: WebSocket user creation not persisting
-
-**Symptom:**
-```typescript
-prismaClient.user.create({ data: {...} })  // Not saving
-```
-
-**Root Cause:**
-Missing `await` - promise never executes
-
-**Solution:**
-```typescript
-// ❌ Wrong
-message(ws, message) {
-    prismaClient.user.create({...})  // Promise created but not awaited
-}
-
-// ✅ Correct
-async message(ws, message) {
-    await prismaClient.user.create({...})  // Actually executes
-}
-```
-
----
-
-### Issue 3: Server exits immediately after starting
-
-**Symptom:**
-```
-Server is running on http://localhost:8080
-[returns to prompt]
-```
-
-**This is NORMAL!** The server is running in the background. Test with:
-```bash
-curl http://localhost:8080/
-```
-
-To see it "actively running" without returning prompt:
-```bash
-bun run index.ts  # Blocks terminal until Ctrl+C
-```
-
----
-
-### Issue 4: Dockerfile copies .env but still uses wrong DATABASE_URL
+### Issue 1: Dockerfile copies .env but still uses wrong DATABASE_URL
 
 **Understanding Build vs Runtime:**
 
@@ -322,7 +198,7 @@ docker run -e DATABASE_URL="different-url" my-image
 
 ---
 
-### Issue 5: Next.js fails during build - "Can't reach database"
+### Issue 2: Next.js fails during build - "Can't reach database"
 
 **Symptom:**
 ```
@@ -365,7 +241,7 @@ export default async function Home() {
 
 ---
 
-### Issue 6: `bun install --frozen-lockfile` fails in Docker
+### Issue 3: `bun install --frozen-lockfile` fails in Docker
 
 **Symptom:**
 ```
@@ -390,27 +266,6 @@ RUN bun install  # Instead of bun install --frozen-lockfile
 ```
 
 ---
-
-### Issue 7: Prisma migrations fail - "schema not found"
-
-**Symptom:**
-```
-Error: Could not find Prisma Schema
-Checked: schema.prisma, prisma/schema.prisma
-```
-
-**Root Cause:**
-Running migrations from wrong directory
-
-**Solution:**
-Update package.json scripts:
-```json
-{
-  "scripts": {
-    "migrate": "cd ../../packages/db && bunx prisma migrate deploy",
-    "start": "bun run migrate && bun run dist/index.js"
-  }
-}
 ```
 
 ---
@@ -641,158 +496,6 @@ volumes:
   postgres_data:/var/lib/postgresql/data
 ```
 - Database data survives container restarts
-
----
-
-## Optimization Techniques
-
-### 1. Multi-Stage Builds (Advanced)
-
-**Purpose:** Smaller final images, separate build and runtime dependencies
-
-```dockerfile
-# Stage 1: Builder
-FROM oven/bun:1-alpine AS builder
-
-WORKDIR /app
-
-# Copy and install
-COPY package.json bun.lock* ./
-COPY packages/ ./packages/
-COPY apps/backend ./apps/backend/
-
-RUN bun install
-RUN cd packages/db && bunx prisma generate
-RUN cd apps/backend && bun run build
-
-# Stage 2: Runtime
-FROM oven/bun:1-alpine
-
-WORKDIR /app
-
-# Copy only necessary files from builder
-COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/db ./packages/db
-
-WORKDIR /app/apps/backend
-
-CMD ["bun", "run", "start:prod"]
-```
-
-**Benefits:**
-- 50-70% smaller images
-- No build tools in production image
-- More secure (fewer attack vectors)
-
-### 2. .dockerignore File
-
-**File: `.dockerignore`**
-
-```
-# Dependencies
-node_modules
-npm-debug.log
-yarn-error.log
-bun.lock
-
-# Build outputs
-dist
-.next
-.turbo
-*.tsbuildinfo
-
-# Environment
-.env
-.env*.local
-
-# Git
-.git
-.gitignore
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-coverage
-*.test.ts
-*.spec.ts
-
-# Docs
-README.md
-*.md
-```
-
-**Benefits:**
-- Faster builds (less context to send)
-- Smaller images
-- Prevents accidental secret leakage
-
-### 3. Production Dependencies Only
-
-```dockerfile
-RUN bun install --production
-```
-
-**Consideration:** TypeScript build needs dev dependencies, so:
-- Build with dev dependencies
-- Install production-only in final stage (multi-stage build)
-
-### 4. Leverage Build Cache
-
-**Use BuildKit (Docker 18.09+):**
-```bash
-DOCKER_BUILDKIT=1 docker build .
-```
-
-**Cache mounts:**
-```dockerfile
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install
-```
-
----
-
-## Package.json Scripts Pattern
-
-### Backend / WebSocket
-
-```json
-{
-  "scripts": {
-    "dev": "bun --watch index.ts",
-    "build": "bun build ./index.ts --target bun --outfile dist/index.js",
-    "migrate": "cd ../../packages/db && bunx prisma migrate deploy",
-    "start": "bun run migrate && bun run dist/index.js",
-    "start:prod": "bun run dist/index.js"
-  }
-}
-```
-
-### Next.js Web
-
-```json
-{
-  "scripts": {
-    "dev": "next dev --port 3000",
-    "build": "next build",
-    "migrate": "cd ../../packages/db && bunx prisma migrate deploy",
-    "start": "bun run migrate && next start",
-    "start:prod": "next start"
-  }
-}
-```
-
-**Why separate `start` and `start:prod`?**
-- `start`: Runs migrations + server (for Docker)
-- `start:prod`: Server only (for environments with separate migration jobs)
 
 ---
 
