@@ -83,9 +83,9 @@ jobs:
       - name: Deploy to VM via SSH
         uses: appleboy/ssh-action@v0.1.6
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/app
             echo "🔄 Pulling latest images from DockerHub..."
