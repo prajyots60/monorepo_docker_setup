@@ -73,27 +73,36 @@ jobs:
       - name: Image digest
         run: echo ${{ steps.meta.outputs.digest }}
 
-  # Optional: Deploy job (runs after build-and-push)
+  # Deployment Job on VM
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd /root/app
+            echo "🔄 Pulling latest images from DockerHub..."
+            docker compose -f docker-compose.prod.yml pull
+            
+            echo "🚀 Restarting all services..."
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f
+            
+            echo "✅ Deployment complete!"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
       
-      - name: Deploy notification
+      - name: Deployment notification
         run: |
-          echo "✅ All images built and pushed successfully!"
-          echo "🚀 Ready to deploy:"
-          echo "   - ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-backend:latest"
-          echo "   - ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-ws:latest"
-          echo "   - ${{ secrets.DOCKERHUB_USERNAME }}/monorepo-web:latest"
+          echo "✅ Deployment successful!"
+          echo "🚀 Services updated on ${{ secrets.VM_HOST }}"
       
-      # Add your deployment steps here
-      # Examples:
-      # - SSH to server and pull new images
-      # - Update Kubernetes deployments
-      # - Trigger AWS ECS deployment
-      # - Update Docker Swarm services
+      
